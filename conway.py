@@ -232,7 +232,8 @@ def test_conway_all_zero():
   conway.run_allzero()
 
 def mkprefix(name):
-  prefix = "state/"+name+"/"
+  num = max(0, int(os.popen('mkdir -p state/%s; cd state/%s; ls -l | wc -l'%(name, name)).read())-1)
+  prefix = "state/"+name+"/%d.exec/"%num
   p = ""
   for preprefix in prefix.split('/'):
     p = p+preprefix+"/"

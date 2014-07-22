@@ -33,6 +33,25 @@ class God:
           break
       writer.writerow([ni]+list(start_board.ravel('F'))+list(end_board.ravel('F')));
 
+  @staticmethod
+  def evolve_onestep(board, nextboard):
+    for ni in range(board.shape[0]):
+        for nj in range(board.shape[1]):
+          count = 0
+          for i in [ni-1, ni, ni+1]:
+            for j in [nj-1, nj, nj+1]:
+              count = count+board[i%H][j%W]
+          if board[ni][nj] == 1 and count < 3:
+            nextboard[ni][nj] = 0 # dies.
+          elif board[ni][nj] == 1 and (count == 3 or count == 4):
+            nextboard[ni][nj] = 1 # lives.
+          elif board[ni][nj] == 1 and count > 4:
+            nextboard[ni][nj] = 0 # dies.
+          elif board[ni][nj] == 0 and count == 3:
+            nextboard[ni][nj] = 1 # dies.
+          else:
+            nextboard[ni][nj] = board[ni][nj]
+
 
   @staticmethod
   def evolve(board):
@@ -43,22 +62,7 @@ class God:
     # delta = npr.randint(5)+1
     delta = 1
     for r in range(5+delta):
-      for ni in range(board.shape[0]):
-        for nj in range(board.shape[1]):
-          count = 0
-          for i in [ni-1, ni, ni+1]:
-            for j in [nj-1, nj, nj+1]:
-              count = count+boards[r%2][i%H][j%W]
-          if boards[r%2][ni][nj] == 1 and count < 3:
-            boards[(r+1)%2][ni][nj] = 0 # dies.
-          elif boards[r%2][ni][nj] == 1 and (count == 3 or count == 4):
-            boards[(r+1)%2][ni][nj] = 1 # lives.
-          elif boards[r%2][ni][nj] == 1 and count > 4:
-            boards[(r+1)%2][ni][nj] = 0 # dies.
-          elif boards[r%2][ni][nj] == 0 and count == 3:
-            boards[(r+1)%2][ni][nj] = 1 # dies.
-          else:
-            boards[(r+1)%2] = boards[r%2]
+      God.evolve_onestep(boards[r%2], boards[(r+1)%2])
       if r == 4:
         start_board = boards[(r+1)%2]
     if int(sum(sum(boards[(r+1)%2]))) == 0: # empty board, discard. 
@@ -70,7 +74,7 @@ class God:
       # plt.draw()
 
 class Conway:
-  def __init__(m, train_file, prefix, trainp = .9, num_hidden = 100, T = 20, B = 5, eta = 0.4, Q = 20, testLag = 0.2):
+  def __init__(m, train_file, prefix, trainp = .9, num_hidden = 100, T = 20, B = 5, eta = 0.4, Q = 20, K = 5, testLag = 0.2):
     m.trainp = trainp
     m.num_hidden = num_hidden
     m.num_vis = H*W
@@ -78,6 +82,7 @@ class Conway:
     m.B = B
     m.eta = eta
     m.Q = Q
+    m.K = K
     m.prefix = prefix
 
     # init data.
@@ -139,7 +144,7 @@ class Conway:
     hb = zeromat(1, m.num_hidden)
     for ni in range(m.num_hidden):
       hb[0, ni] = 1 if npr.random() < h[0, ni] else 0
-    return hb
+    return (hb, (np.multiply(hb, 1-h)+np.multiply(1-hb, h)).T*y)
 
   def sampleY(m, x, h):
     y = zeromat(1, m.num_vis)
@@ -148,18 +153,44 @@ class Conway:
                                     +m.weights0[ni, :]*x.T) else 0
     return y
 
-  def gradientAA(m, x, y):
+  def sampleY_prior(m, h):
+    y = zeromat(1, m.num_vis)
+    yb = zeromat(1, m.num_vis)
+    for ni in range(m.num_vis):
+      y[0, ni] = sigmoid(m.weights1.T[ni, :]*h.T)
+      yb[0, ni] = 1 if npr.random() < y[0, ni] else 1
+    return (yb, h.T*(np.multiply(yb, 1-y)+np.multiply(1-yb, y)))
+
+  def gradientA(m, x, y):
     h = m.activateHidden(y)
     gradw1 = h.T*y
     gradw0 = y.T*x
     y = toInt(randmat(1, m.num_vis) < .5)
     for t in range(m.T):
-      hb = m.sampleHidden(y)
+      (hb, _) = m.sampleHidden(y)
       y = m.sampleY(x, hb)
       if t >= m.B: # after burnin.
         gradw1 = gradw1-hb.T*y/float(m.T-m.B)
         gradw0 = gradw0-y.T*x/float(m.T-m.B)
     return (gradw0, gradw1, y, hb)
+
+  def gradientAA(m, x, y):
+    for k in range(m.K):
+      gradients = list()
+      weights = list()
+      y = toInt(randmat(1, m.num_vis) < .5)
+      for t in range(m.T):
+        if t >= m.B:
+          (hb, hg) = m.sampleHidden(m, y)
+          gradients.append(hg)
+          (yb, yg) = m.sampleY_prior(m, h)
+          gradients.append(yg)
+          weights.append()
+
+
+
+
+
 
   def adagrad(m, grad):
     (gradw0, gradw1, y, _) = grad
@@ -173,14 +204,14 @@ class Conway:
     for q in range(m.Q):
       train_err = 0
       for (ni, (x, y)) in enumerate(zip(m.starts, m.stops)):
-        train_y = m.adagrad(m.gradientAA(x, y))
+        train_y = m.adagrad(m.gradientA(x, y))
         train_err = train_err+toInt(y != train_y).sum()/float(H*W*m.testLag)
         if (q*m.num_train+ni) % m.testLag == 0:
           m.log("train err %f" % train_err)
           train_err = 0
           err = 0
           for (test_x, test_y) in zip(m.test_starts, m.test_stops):
-            (_, _, y, _) = m.gradientAA(test_x, test_y)
+            (_, _, y, _) = m.gradientA(test_x, test_y)
             err = err+toInt(y != test_y).sum()/float(H*W*m.num_test)
           m.log("test err %f" % err)
 
@@ -196,13 +227,24 @@ def test_conway():
   conway.run()
 
 def test_conway_all_zero():
-  conway = Conway("data/conway.csv")
+  prefix = mkprefix("allzero")
+  conway = Conway("data/conway.csv", prefix)
   conway.run_allzero()
+
+def mkprefix(name):
+  prefix = "state/"+name+"/"
+  p = ""
+  for preprefix in prefix.split('/'):
+    p = p+preprefix+"/"
+    if not os.path.exists(p):
+      os.mkdir(p)
+  return prefix
 
 if __name__ == "__main__":
   # God.gen("data/conway.csv", 1000);
   # test_conway()
   # test_conway_all_zero()
+  # sys.exit(0)
 
   # parse options.
   parser = OptionParser()
@@ -212,19 +254,17 @@ if __name__ == "__main__":
   parser.add_option("--B", type="int", dest="B", default=5)
   parser.add_option("--hidden", type="int", dest="hidden", default=100)
   parser.add_option("--Q", type="int", dest="Q", default=20)
+  parser.add_option("--K", type="int", dest="K", default=5)
   parser.add_option("--testLag", type="float", dest="testLag", default=0.2)
   parser.add_option("--eta", type="float", dest="eta", default=0.4)
   (options, args) = parser.parse_args()
 
   # run.
   name = options.name
-  prefix = "state/"+name+"/"
-  p = ""
-  for preprefix in prefix.split('/'):
-    p = p+preprefix+"/"
-    if not os.path.exists(p):
-      os.mkdir(p)
-  conway = Conway(options.dataset, prefix, T=options.T, B=options.B, Q=options.Q, eta=options.eta, testLag=options.testLag, num_hidden=options.hidden)
+  prefix = mkprefix(name)
+  
+  conway = Conway(options.dataset, prefix, T=options.T, B=options.B, Q=options.Q, eta=options.eta,\
+                   K=options.K, testLag=options.testLag, num_hidden=options.hidden)
 
 
   conway.run()

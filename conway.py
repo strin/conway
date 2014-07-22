@@ -1,7 +1,7 @@
 import csv
 import numpy.random as npr
 import numpy as np
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import os, sys
 from optparse import OptionParser
 
@@ -146,7 +146,6 @@ class Conway:
     for ni in range(m.num_vis):
       y[0, ni] = 1 if npr.random() < sigmoid(m.weights1.T[ni, :]*h.T \
                                     +m.weights0[ni, :]*x.T) else 0
-
     return y
 
   def gradientAA(m, x, y):

@@ -188,10 +188,6 @@ class Conway:
           weights.append()
 
 
-
-
-
-
   def adagrad(m, grad):
     (gradw0, gradw1, y, _) = grad
     m.gradw0sq = m.gradw0sq+np.multiply(gradw0, gradw0)

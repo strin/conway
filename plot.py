@@ -52,17 +52,17 @@ if len(trainerr) > 0:
   plt.figure(1)
   plt.title(name+" (training error) ")
   plt.xlabel('Effective passes through training data')
-  plt.ylabel('Test accuracy')
+  plt.ylabel('Accuracy')
   plt.axis()
   plt.legend(loc=4,prop={'size':9})
-  plt.savefig('plot.pdf')
+  plt.savefig('plot_train.pdf')
 
 if len(testerr) > 0:
   plt.figure(2)
   plt.title(name+" (test error) ")
   plt.xlabel('Effective passes through training data')
-  plt.ylabel('# Test transitions')
+  plt.ylabel('Accuracy')
   plt.axis()
   plt.legend(loc=4,prop={'size':9})
-  plt.savefig('plottime.pdf')
+  plt.savefig('plot.pdf')
 

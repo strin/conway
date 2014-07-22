@@ -16,4 +16,3 @@ if [ ! -z "$2" ]
 fi
 python plot.py $1 $NUM $LAST
 open plot.pdf
-open plottime.pdf
